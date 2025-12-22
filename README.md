@@ -26,10 +26,10 @@ An R package for Partial Least Squares (PLS) analysis with permutation testing a
 
 ```r
 # Install from local source
-install.packages("/path/to/PLS-R", repos = NULL, type = "source")
+install.packages("/path/to/plscmd", repos = NULL, type = "source")
 
 # Or using devtools
-devtools::install_local("/path/to/PLS-R")
+devtools::install_github("immcdonough/plscmd")
 ```
 
 ## Quick Start
@@ -153,3 +153,4 @@ GPL-3
 ## Original MATLAB Code
 
 This R package is a translation of the MATLAB PLS command line tools developed by Jimmy Shen at the Rotman Research Institute, Toronto, Canada.
+
