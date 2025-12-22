@@ -43,6 +43,12 @@ export(plot_lv_correlations)
 export(plot_lv_summary)
 export(plot_all_significant_lvs)
 
+# Export robust correlation functions
+export(robust_cor)
+export(winsorized_cor)
+export(biweight_midcor)
+export(percentage_bend_cor)
+
 # Import from base packages
 importFrom(stats, sd, var, cor, cov, runif, rnorm, complete.cases, cor.test, quantile)
 importFrom(utils, head, tail)

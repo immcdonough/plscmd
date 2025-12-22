@@ -98,6 +98,54 @@ result <- pls_analysis(
 result$lvcorrs
 ```
 
+### Using Robust Correlations
+
+For data with outliers or influential points, use robust correlation methods:
+
+```r
+# Behavior PLS with biweight midcorrelation (robust to outliers)
+result <- pls_analysis(
+  datamat_lst = list(brain_data),
+  num_subj_lst = c(n_subjects),
+  num_cond = n_conditions,
+  option = list(
+    method = 3,
+    stacked_behavdata = behavior_data,
+    num_perm = 500,
+    num_boot = 500,
+    robust_method = "biweight"  # Use robust correlation
+  )
+)
+```
+
+**Available Robust Methods:**
+
+| Method | Description | Best For |
+|--------|-------------|----------|
+| `"none"` | Standard Pearson correlation (default) | Clean data |
+| `"spearman"` | Spearman rank correlation | Non-linear relationships, ordinal data |
+| `"winsorized"` | Trims extreme values before correlation | Moderate outliers |
+| `"biweight"` | Biweight midcorrelation | Strong outliers, high breakdown point |
+| `"percentage_bend"` | Percentage bend correlation | Balance of robustness and efficiency |
+
+**Additional Options:**
+- `robust_trim`: Trim proportion for winsorized method (default: 0.1 = 10% from each tail)
+- `robust_beta`: Bend constant for percentage bend (default: 0.2)
+
+```r
+# Winsorized correlation with 15% trimming
+result <- pls_analysis(
+  ...,
+  option = list(
+    method = 3,
+    robust_method = "winsorized",
+    robust_trim = 0.15
+  )
+)
+```
+
+**Note:** Robust methods only apply when `cormode = 0` (Pearson correlation mode). They are ignored for covariance, cosine, or dot product modes.
+
 ## Data Organization
 
 Data matrices should be organized with subjects in rows (stacked by condition) and variables (voxels/electrodes) in columns:
@@ -124,6 +172,8 @@ Group 2:
 | `plot_brain_behavior_scatter()` | Scatter plot of brain vs behavior scores |
 | `plot_bootstrap_ratios()` | Bar plot of bootstrap ratios |
 | `plot_lv_correlations()` | Bar plot of LV correlations |
+| `robust_cor()` | Compute robust correlations |
+| `biweight_midcor()` | Biweight midcorrelation |
 
 ## Result Structure
 
