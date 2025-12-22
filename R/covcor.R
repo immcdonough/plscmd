@@ -24,6 +24,10 @@
 #' @param datamat_reorder Reorder indices for data matrix
 #' @param behavdata_reorder Reorder indices for behavior data
 #' @param datamat_reorder_4beh Reorder indices for multiblock behavior
+#' @param robust_method Robust correlation method: "none", "spearman",
+#'   "winsorized", "biweight", or "percentage_bend"
+#' @param trim Trim proportion for winsorized correlation (default: 0.1)
+#' @param beta Bend constant for percentage bend correlation (default: 0.2)
 #'
 #' @return List containing:
 #'   \itemize{
@@ -39,7 +43,8 @@ rri_get_covcor <- function(method, stacked_datamat, stacked_behavdata,
                            meancentering_type, cormode, single_cond_lst = NULL,
                            is_observation = TRUE, num_boot = 0,
                            datamat_reorder = NULL, behavdata_reorder = NULL,
-                           datamat_reorder_4beh = NULL) {
+                           datamat_reorder_4beh = NULL,
+                           robust_method = "none", trim = 0.1, beta = 0.2) {
 
   if (!is.matrix(stacked_datamat)) {
     stacked_datamat <- as.matrix(stacked_datamat)
@@ -241,7 +246,8 @@ rri_get_covcor <- function(method, stacked_datamat, stacked_behavdata,
 
         if (method == 6) {
           Tdatamatcorrs <- datamatcorrs
-          Bdatamatcorrs <- rri_corr_maps_notall(behavdata, datamat_4beh, n, bscan, cormode)
+          Bdatamatcorrs <- rri_corr_maps_notall(behavdata, datamat_4beh, n, bscan, cormode,
+                                                 robust_method = robust_method, trim = trim, beta = beta)
           datamatcorrs_lst <- c(datamatcorrs_lst, list(Bdatamatcorrs))
 
           TBdatamatcorrs <- rbind(Tdatamatcorrs, Bdatamatcorrs)
@@ -252,7 +258,8 @@ rri_get_covcor <- function(method, stacked_datamat, stacked_behavdata,
 
       } else if (method %in% c(3, 5)) {
         # Behavior PLS
-        datamatcorrs <- rri_corr_maps(behavdata, datamat, n, k, cormode)
+        datamatcorrs <- rri_corr_maps(behavdata, datamat, n, k, cormode,
+                                      robust_method = robust_method, trim = trim, beta = beta)
         datamatcorrs_lst <- c(datamatcorrs_lst, list(datamatcorrs))
         TBdatamatcorrs <- NULL
 
@@ -310,7 +317,8 @@ rri_get_covcor <- function(method, stacked_datamat, stacked_behavdata,
           }
         }
 
-        Bdatamatcorrs <- rri_corr_maps_notall(behavdata, datamat_4beh, n, bscan, cormode)
+        Bdatamatcorrs <- rri_corr_maps_notall(behavdata, datamat_4beh, n, bscan, cormode,
+                                               robust_method = robust_method, trim = trim, beta = beta)
         datamatcorrs_lst <- c(datamatcorrs_lst, list(Bdatamatcorrs))
 
         TBdatamatcorrs <- rbind(Tdatamatcorrs, Bdatamatcorrs)
@@ -374,11 +382,15 @@ rri_get_covcor <- function(method, stacked_datamat, stacked_behavdata,
 #' @param n Number of subjects
 #' @param bscan Conditions to include
 #' @param cormode Correlation mode
+#' @param robust_method Robust correlation method (see rri_xcor)
+#' @param trim Trim proportion for winsorized correlation
+#' @param beta Bend constant for percentage bend correlation
 #'
 #' @return Correlation maps for selected conditions
 #'
 #' @keywords internal
-rri_corr_maps_notall <- function(behav, datamat, n, bscan, cormode = 0) {
+rri_corr_maps_notall <- function(behav, datamat, n, bscan, cormode = 0,
+                                  robust_method = "none", trim = 0.1, beta = 0.2) {
   if (!is.matrix(behav)) behav <- as.matrix(behav)
   if (!is.matrix(datamat)) datamat <- as.matrix(datamat)
 
@@ -391,7 +403,8 @@ rri_corr_maps_notall <- function(behav, datamat, n, bscan, cormode = 0) {
     behav_subset <- behav[start_row:end_row, , drop = FALSE]
     data_subset <- datamat[start_row:end_row, , drop = FALSE]
 
-    temp <- rri_xcor(behav_subset, data_subset, cormode)
+    temp <- rri_xcor(behav_subset, data_subset, cormode,
+                     robust_method = robust_method, trim = trim, beta = beta)
     maps <- rbind(maps, temp)
   }
 

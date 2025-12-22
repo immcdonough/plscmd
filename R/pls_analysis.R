@@ -31,6 +31,10 @@
 #'     \item{boot_type}{"strat" (default) or "nonstrat" bootstrap}
 #'     \item{is_struct}{Set to TRUE for structure PLS (default FALSE)}
 #'     \item{verbose}{Print progress messages (default TRUE)}
+#'     \item{robust_method}{Robust correlation method (only for cormode=0):
+#'       "none" (default), "spearman", "winsorized", "biweight", "percentage_bend"}
+#'     \item{robust_trim}{Trim proportion for winsorized correlation (default 0.1)}
+#'     \item{robust_beta}{Bend constant for percentage bend correlation (default 0.2)}
 #'   }
 #'
 #' @return A list with class "pls_result" containing:
@@ -115,6 +119,9 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
   boot_type <- "strat"
   nonrotated_boot <- FALSE
   verbose <- TRUE
+  robust_method <- "none"
+  robust_trim <- 0.1
+  robust_beta <- 0.2
 
   # Parse options
   if (!is.null(option)) {
@@ -204,6 +211,28 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
     if (!is.null(option$verbose)) {
       verbose <- option$verbose
     }
+
+    # Robust correlation options
+    if (!is.null(option$robust_method)) {
+      robust_method <- tolower(option$robust_method)
+      if (!robust_method %in% c("none", "pearson", "spearman", "winsorized", "biweight", "percentage_bend")) {
+        stop("robust_method should be 'none', 'pearson', 'spearman', 'winsorized', 'biweight', or 'percentage_bend'")
+      }
+    }
+
+    if (!is.null(option$robust_trim)) {
+      robust_trim <- option$robust_trim
+      if (robust_trim <= 0 || robust_trim >= 0.5) {
+        stop("robust_trim should be between 0 and 0.5 (exclusive)")
+      }
+    }
+
+    if (!is.null(option$robust_beta)) {
+      robust_beta <- option$robust_beta
+      if (robust_beta <= 0 || robust_beta >= 0.5) {
+        stop("robust_beta should be between 0 and 0.5 (exclusive)")
+      }
+    }
   }
 
   # Initialize
@@ -250,6 +279,7 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
   result <- list()
   result$method <- method
   result$is_struct <- is_struct
+  result$robust_method <- robust_method
 
   # Stack data matrices
   if (verbose) {
@@ -269,7 +299,8 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
     method, stacked_datamat, stacked_behavdata,
     num_groups, num_subj_lst, num_cond, bscan,
     meancentering_type, cormode, single_cond_lst,
-    TRUE, num_boot, datamat_reorder, behavdata_reorder
+    TRUE, num_boot, datamat_reorder, behavdata_reorder, NULL,
+    robust_method = robust_method, trim = robust_trim, beta = robust_beta
   )
 
   datamatsvd <- covcor_result$datamatsvd
@@ -530,7 +561,8 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
         method, stacked_datamat, stacked_behavdata,
         num_groups, num_subj_lst, num_cond, bscan,
         meancentering_type, cormode, single_cond_lst,
-        FALSE, 0, datamat_reorder, behavdata_reorder
+        FALSE, 0, datamat_reorder, behavdata_reorder, NULL,
+        robust_method = robust_method, trim = robust_trim, beta = robust_beta
       )
 
       datamatsvd_p <- perm_covcor$datamatsvd
@@ -692,7 +724,8 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
         method, stacked_datamat, stacked_behavdata,
         num_groups, num_subj_lst, num_cond, bscan,
         meancentering_type, cormode, single_cond_lst,
-        TRUE, num_boot, datamat_reorder, behavdata_reorder, datamat_reorder_4beh
+        TRUE, num_boot, datamat_reorder, behavdata_reorder, datamat_reorder_4beh,
+        robust_method = robust_method, trim = robust_trim, beta = robust_beta
       )
 
       datamatsvd_b <- boot_covcor$datamatsvd

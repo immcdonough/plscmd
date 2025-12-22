@@ -211,11 +211,22 @@ cumulative_gaussian_inv <- function(D, mu = 0, sigma = 1) {
 #'     \item 4 = Cosine angle
 #'     \item 6 = Dot product
 #'   }
+#' @param robust_method Robust correlation method (only applies when cormode = 0):
+#'   \itemize{
+#'     \item "none" or "pearson" = Standard Pearson correlation (default)
+#'     \item "spearman" = Spearman rank correlation
+#'     \item "winsorized" = Winsorized correlation
+#'     \item "biweight" = Biweight midcorrelation
+#'     \item "percentage_bend" = Percentage bend correlation
+#'   }
+#' @param trim Trim proportion for winsorized correlation (default: 0.1)
+#' @param beta Bend constant for percentage bend correlation (default: 0.2)
 #'
 #' @return Cross-correlation matrix
 #'
 #' @export
-rri_xcor <- function(design, datamat, cormode = 0) {
+rri_xcor <- function(design, datamat, cormode = 0, robust_method = "none",
+                     trim = 0.1, beta = 0.2) {
   if (!is.matrix(design)) design <- as.matrix(design)
   if (!is.matrix(datamat)) datamat <- as.matrix(datamat)
 
@@ -224,6 +235,17 @@ rri_xcor <- function(design, datamat, cormode = 0) {
 
   if (r != dr) {
     stop("Error in rri_xcor: input matrices must have same number of rows")
+  }
+
+  # Normalize robust_method
+  robust_method <- tolower(robust_method)
+  if (robust_method == "none") robust_method <- "pearson"
+
+  # Use robust correlation for cormode = 0 with non-Pearson method
+  if (cormode == 0 && robust_method != "pearson") {
+    return(rri_xcor_robust(design, datamat, cormode = 0,
+                           robust_method = robust_method,
+                           trim = trim, beta = beta))
   }
 
   if (cormode == 0) {
@@ -376,11 +398,15 @@ ssb_rri_task_mean <- function(inmat, n) {
 #' @param n Number of subjects
 #' @param k Number of conditions
 #' @param cormode Correlation mode (see rri_xcor)
+#' @param robust_method Robust correlation method (see rri_xcor)
+#' @param trim Trim proportion for winsorized correlation
+#' @param beta Bend constant for percentage bend correlation
 #'
 #' @return Stacked correlation maps
 #'
 #' @export
-rri_corr_maps <- function(behav, datamat, n, k, cormode = 0) {
+rri_corr_maps <- function(behav, datamat, n, k, cormode = 0,
+                          robust_method = "none", trim = 0.1, beta = 0.2) {
   if (!is.matrix(behav)) behav <- as.matrix(behav)
   if (!is.matrix(datamat)) datamat <- as.matrix(datamat)
 
@@ -393,7 +419,8 @@ rri_corr_maps <- function(behav, datamat, n, k, cormode = 0) {
     behav_subset <- behav[start_row:end_row, , drop = FALSE]
     data_subset <- datamat[start_row:end_row, , drop = FALSE]
 
-    temp <- rri_xcor(behav_subset, data_subset, cormode)
+    temp <- rri_xcor(behav_subset, data_subset, cormode,
+                     robust_method = robust_method, trim = trim, beta = beta)
     maps <- rbind(maps, temp)
   }
 
