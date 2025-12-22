@@ -42,8 +42,32 @@ Tested on R 4.3.x and R 4.4.x.
 install.packages("devtools")
 devtools::install_github("immcdonough/plscmd")
 
+# Install WITH vignettes and documentation (takes longer but recommended)
+devtools::install_github("immcdonough/plscmd",
+                         build_vignettes = TRUE,
+                         dependencies = TRUE)
+
 # Install visualization dependencies
 install.packages(c("ggplot2", "patchwork"))
+```
+
+## Documentation
+
+After installation, access documentation in RStudio:
+
+```r
+# View package help
+help(package = "plscmd")
+
+# View function help
+?pls_analysis
+?plot_bootstrap_ratios
+
+# View user guide vignette (if installed with build_vignettes = TRUE)
+vignette("plscmd-user-guide", package = "plscmd")
+
+# List all vignettes
+browseVignettes("plscmd")
 ```
 
 ## Quick Start
