@@ -50,5 +50,8 @@ export(biweight_midcor)
 export(percentage_bend_cor)
 
 # Import from base packages
-importFrom(stats, sd, var, cor, cov, runif, rnorm, complete.cases, cor.test, quantile)
+importFrom(stats, sd, var, cor, cov, runif, rnorm, complete.cases, cor.test, quantile, median, mad)
 importFrom(utils, head, tail)
+
+# Import .data pronoun for ggplot2 aes()
+importFrom(rlang, .data)

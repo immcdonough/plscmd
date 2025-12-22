@@ -31,7 +31,8 @@ Depends:
     R (>= 4.0.0)
 Imports:
     stats,
-    utils
+    utils,
+    rlang
 Suggests:
     ggplot2 (>= 3.4.0),
     patchwork (>= 1.1.0),
