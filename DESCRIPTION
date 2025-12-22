@@ -1,14 +1,15 @@
 Package: plscmd
 Type: Package
 Title: Partial Least Squares Analysis with Permutation and Bootstrap Testing
-Version: 1.0.0
+Version: 1.1.0
 Authors@R: c(
+    person("Ian", "McDonogh", role = c("aut", "cre"),
+           email = "ian.mcdonough@gmail.com"),
     person("Jimmy", "Shen", role = "aut",
            comment = "Original MATLAB implementation"),
     person("Rotman Research Institute", role = "cph"),
-    person("Claude", "AI", role = c("aut", "cre"),
-           email = "noreply@anthropic.com",
-           comment = "R implementation"))
+    person("Claude", "AI", role = "ctb",
+           comment = "R implementation assistance"))
 Description: Comprehensive Partial Least Squares (PLS) analysis toolkit for
     neuroimaging data. Includes six PLS methods: Mean-Centering Task PLS,
     Non-Rotated Task PLS, Regular Behavior PLS, Multiblock PLS,
@@ -16,19 +17,24 @@ Description: Comprehensive Partial Least Squares (PLS) analysis toolkit for
     Supports permutation testing for statistical significance,
     bootstrap resampling for confidence intervals, and split-half
     validation for reliability assessment. Handles missing data
-    through specialized functions. This is an R port of the MATLAB
+    through specialized functions. Includes publication-quality
+    visualization functions. This is an R port of the MATLAB
     PLS command line tools developed at the Rotman Research Institute.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
+URL: https://github.com/immcdonough/plscmd
+BugReports: https://github.com/immcdonough/plscmd/issues
 Depends:
-    R (>= 3.5.0)
+    R (>= 4.0.0)
 Imports:
     stats,
     utils
 Suggests:
+    ggplot2 (>= 3.4.0),
+    patchwork (>= 1.1.0),
     testthat (>= 3.0.0),
     knitr,
     rmarkdown

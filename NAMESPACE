@@ -32,6 +32,17 @@ export(missvar)
 export(misssum)
 export(misssvd)
 
+# Export visualization functions
+export(pls_summary_table)
+export(theme_pls)
+export(pls_colors)
+export(plot_behavior_correlations)
+export(plot_brain_behavior_scatter)
+export(plot_bootstrap_ratios)
+export(plot_lv_correlations)
+export(plot_lv_summary)
+export(plot_all_significant_lvs)
+
 # Import from base packages
-importFrom(stats, sd, var, cor, cov, runif, rnorm, complete.cases)
+importFrom(stats, sd, var, cor, cov, runif, rnorm, complete.cases, cor.test, quantile)
 importFrom(utils, head, tail)
