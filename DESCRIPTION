@@ -1,7 +1,7 @@
 Package: plscmd
 Type: Package
 Title: Partial Least Squares Analysis with Permutation and Bootstrap Testing
-Version: 1.2.0
+Version: 1.3.0
 Authors@R: c(
     person("Ian", "McDonogh", role = c("aut", "cre"),
            email = "ian.mcdonough@gmail.com"),

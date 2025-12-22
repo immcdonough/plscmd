@@ -1,0 +1,436 @@
+---
+title: "plscmd: User Guide for PLS Analysis"
+author: "Ian McDonogh"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{plscmd: User Guide for PLS Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+The `plscmd` package provides a comprehensive toolkit for Partial Least Squares (PLS) analysis of neuroimaging data. It is an R implementation of the MATLAB PLS command line tools developed at the Rotman Research Institute.
+
+### Key Features
+
+- **Six PLS methods** for different research questions
+- **Permutation testing** for statistical significance
+- **Bootstrap resampling** for confidence intervals
+- **Robust correlation options** for handling outliers
+- **Publication-quality visualizations**
+
+## Installation
+
+```{r install, eval=FALSE}
+# Install from GitHub
+devtools::install_github("immcdonough/plscmd")
+
+# Load the package
+library(plscmd)
+
+# Install optional visualization dependencies
+install.packages(c("ggplot2", "patchwork"))
+```
+
+```{r load, message=FALSE}
+library(plscmd)
+```
+
+## Data Organization
+
+Data matrices should be organized with:
+
+- **Rows**: Subjects stacked by condition
+- **Columns**: Variables (voxels, ROIs, electrodes, etc.)
+
+```
+Group 1:
+  Condition 1: Subject 1, Subject 2, ..., Subject n
+  Condition 2: Subject 1, Subject 2, ..., Subject n
+  Condition 3: Subject 1, Subject 2, ..., Subject n
+Group 2:
+  Condition 1: Subject 1, Subject 2, ..., Subject m
+  ...
+```
+
+## PLS Methods Overview
+
+| Method | Name | Use Case |
+|--------|------|----------|
+| 1 | Mean-Centering Task PLS | Identify brain patterns that differ across conditions |
+| 2 | Non-Rotated Task PLS | Test specific condition contrasts |
+| 3 | Regular Behavior PLS | Find brain-behavior correlations |
+| 4 | Multiblock PLS | Combine task and behavior in one analysis |
+| 5 | Non-Rotated Behavior PLS | Test specific behavior contrasts |
+| 6 | Non-Rotated Multiblock PLS | Multiblock with specific contrasts |
+
+## Example 1: Task PLS
+
+Task PLS identifies brain patterns that differentiate experimental conditions.
+
+```{r task-pls-example}
+# Simulate data: 2 groups, 3 conditions, 10 subjects each, 50 brain regions
+set.seed(42)
+
+n_subj <- 10
+n_cond <- 3
+n_vars <- 50
+
+# Group 1: Control
+datamat1 <- matrix(rnorm(n_subj * n_cond * n_vars),
+                   nrow = n_subj * n_cond, ncol = n_vars)
+
+# Add condition effect to first 10 regions
+for (c in 1:n_cond) {
+  rows <- ((c - 1) * n_subj + 1):(c * n_subj)
+  datamat1[rows, 1:10] <- datamat1[rows, 1:10] + (c - 2) * 0.8
+}
+
+# Group 2: Patient (stronger effect)
+datamat2 <- matrix(rnorm(n_subj * n_cond * n_vars),
+                   nrow = n_subj * n_cond, ncol = n_vars)
+
+for (c in 1:n_cond) {
+  rows <- ((c - 1) * n_subj + 1):(c * n_subj)
+  datamat2[rows, 1:10] <- datamat2[rows, 1:10] + (c - 2) * 1.5
+}
+
+# Run Task PLS
+result <- pls_analysis(
+  datamat_lst = list(datamat1, datamat2),
+  num_subj_lst = c(n_subj, n_subj),
+  num_cond = n_cond,
+  option = list(
+    method = 1,           # Mean-Centering Task PLS
+    num_perm = 100,       # Permutations (use 500+ for real analysis)
+    num_boot = 100,       # Bootstrap samples
+    verbose = FALSE
+  )
+)
+
+# View results
+print(result)
+```
+
+### Interpreting Task PLS Results
+
+```{r task-results}
+# Summary table
+summary_table <- pls_summary_table(result)
+print(summary_table)
+
+# Significant LVs
+sig_lvs <- which(result$perm_result$sprob < 0.05)
+cat("Significant LVs (p < 0.05):",
+    if(length(sig_lvs) > 0) sig_lvs else "None", "\n")
+
+# Brain saliences for LV1 (first 10 regions)
+cat("\nBrain saliences (LV1, first 10 regions):\n")
+print(round(result$u[1:10, 1], 3))
+
+# Design saliences show condition patterns
+cat("\nDesign saliences (LV1):\n")
+cat("Group 1 - Cond 1:", round(result$v[1, 1], 3), "\n")
+cat("Group 1 - Cond 2:", round(result$v[2, 1], 3), "\n")
+cat("Group 1 - Cond 3:", round(result$v[3, 1], 3), "\n")
+cat("Group 2 - Cond 1:", round(result$v[4, 1], 3), "\n")
+cat("Group 2 - Cond 2:", round(result$v[5, 1], 3), "\n")
+cat("Group 2 - Cond 3:", round(result$v[6, 1], 3), "\n")
+```
+
+## Example 2: Behavior PLS
+
+Behavior PLS identifies brain patterns that correlate with behavioral measures.
+
+```{r behavior-pls-example}
+set.seed(123)
+
+n_subj <- 20
+n_cond <- 2
+n_vars <- 50
+n_behav <- 3
+
+# Create brain data
+datamat <- matrix(rnorm(n_subj * n_cond * n_vars),
+                  nrow = n_subj * n_cond, ncol = n_vars)
+
+# Create behavioral data
+behavdata <- matrix(rnorm(n_subj * n_cond * n_behav),
+                    nrow = n_subj * n_cond, ncol = n_behav)
+colnames(behavdata) <- c("Memory", "Attention", "Speed")
+
+# Add brain-behavior relationship
+# Regions 1-10 correlate with Memory
+# Regions 11-20 correlate with Attention
+for (i in 1:(n_subj * n_cond)) {
+  datamat[i, 1:10] <- datamat[i, 1:10] + 0.6 * behavdata[i, 1]
+  datamat[i, 11:20] <- datamat[i, 11:20] + 0.5 * behavdata[i, 2]
+}
+
+# Run Behavior PLS
+result_beh <- pls_analysis(
+  datamat_lst = list(datamat),
+  num_subj_lst = c(n_subj),
+  num_cond = n_cond,
+  option = list(
+    method = 3,           # Behavior PLS
+    stacked_behavdata = behavdata,
+    num_perm = 100,
+    num_boot = 100,
+    verbose = FALSE
+  )
+)
+
+# Results
+summary_beh <- pls_summary_table(result_beh)
+print(summary_beh)
+```
+
+### Brain-Behavior Correlations
+
+```{r behavior-results}
+# LV correlations show brain-behavior relationship strength
+if (!is.null(result_beh$lvcorrs)) {
+  cat("LV Correlations (behavior x LV):\n")
+  lvcorrs <- result_beh$lvcorrs
+  rownames(lvcorrs) <- rep(c("Memory", "Attention", "Speed"), n_cond)
+  print(round(lvcorrs[, 1:min(3, ncol(lvcorrs))], 3))
+}
+```
+
+## Using Robust Correlations
+
+For data with outliers, use robust correlation methods:
+
+```{r robust-example}
+# Add outliers to the data
+datamat_outlier <- datamat
+datamat_outlier[1, 1:10] <- datamat_outlier[1, 1:10] + 10  # Extreme outlier
+
+# Standard PLS (affected by outlier)
+result_standard <- pls_analysis(
+  datamat_lst = list(datamat_outlier),
+  num_subj_lst = c(n_subj),
+  num_cond = n_cond,
+  option = list(
+    method = 3,
+    stacked_behavdata = behavdata,
+    num_perm = 50,
+    num_boot = 50,
+    verbose = FALSE
+  )
+)
+
+# Robust PLS using biweight midcorrelation
+result_robust <- pls_analysis(
+  datamat_lst = list(datamat_outlier),
+  num_subj_lst = c(n_subj),
+  num_cond = n_cond,
+  option = list(
+    method = 3,
+    stacked_behavdata = behavdata,
+    num_perm = 50,
+    num_boot = 50,
+    robust_method = "biweight",  # Robust to outliers
+    verbose = FALSE
+  )
+)
+
+cat("Standard PLS - LV1 p-value:", result_standard$perm_result$sprob[1], "\n")
+cat("Robust PLS - LV1 p-value:", result_robust$perm_result$sprob[1], "\n")
+```
+
+### Available Robust Methods
+
+| Method | Description | Use When |
+|--------|-------------|----------|
+| `"none"` | Standard Pearson | Clean data, no outliers |
+| `"spearman"` | Rank correlation | Non-linear relationships |
+| `"winsorized"` | Trims extreme values | Moderate outliers |
+| `"biweight"` | Biweight midcorrelation | Strong outliers |
+| `"percentage_bend"` | Percentage bend | Balance of robustness/efficiency |
+
+## Visualization
+
+The package includes publication-quality plotting functions.
+
+```{r viz-check, echo=FALSE}
+has_ggplot <- requireNamespace("ggplot2", quietly = TRUE)
+has_patchwork <- requireNamespace("patchwork", quietly = TRUE)
+```
+
+```{r visualization, eval=has_ggplot}
+library(ggplot2)
+
+# Bootstrap ratios show reliable brain regions
+if (!is.null(result$boot_result)) {
+  bsr <- result$boot_result$compare_u[, 1]
+
+  # Create simple visualization
+  bsr_df <- data.frame(
+    Region = 1:length(bsr),
+    BSR = bsr,
+    Significant = abs(bsr) > 1.96
+  )
+
+  # Show top regions
+  top_regions <- bsr_df[order(abs(bsr_df$BSR), decreasing = TRUE)[1:15], ]
+
+  ggplot(top_regions, aes(x = reorder(factor(Region), BSR), y = BSR, fill = Significant)) +
+    geom_bar(stat = "identity") +
+    geom_hline(yintercept = c(-1.96, 1.96), linetype = "dashed", color = "red") +
+    scale_fill_manual(values = c("TRUE" = "steelblue", "FALSE" = "gray70")) +
+    coord_flip() +
+    labs(title = "Bootstrap Ratios - Top 15 Regions (LV1)",
+         x = "Brain Region", y = "Bootstrap Ratio") +
+    theme_minimal()
+}
+```
+
+### Using Built-in Plotting Functions
+
+```{r builtin-plots, eval=FALSE}
+library(ggplot2)
+library(patchwork)
+
+# Summary table
+summary_table <- pls_summary_table(result)
+
+# Individual plots
+p1 <- plot_behavior_correlations(result_beh, lv = 1,
+        behav_names = c("Memory", "Attention", "Speed"))
+
+p2 <- plot_brain_behavior_scatter(result_beh, lv = 1)
+
+p3 <- plot_bootstrap_ratios(result_beh, lv = 1,
+        region_names = paste0("ROI_", 1:50))
+
+# Combined figure
+fig <- plot_lv_summary(result_beh, lv = 1,
+         behav_names = c("Memory", "Attention", "Speed"),
+         save_path = "LV1_summary.png")
+
+# Process all significant LVs
+figures <- plot_all_significant_lvs(result_beh,
+             behav_names = c("Memory", "Attention", "Speed"),
+             output_dir = "figures")
+```
+
+### Customizing Plot Appearance
+
+```{r custom-plots, eval=FALSE}
+# Custom colors
+my_colors <- pls_colors()
+my_colors$positive <- "#E41A1C"
+my_colors$negative <- "#377EB8"
+
+# Custom font sizes
+my_fonts <- list(
+  base_size = 14,
+  title_size = 18,
+  axis_title_size = 14,
+  axis_text_size = 12
+)
+
+# Apply to plots
+p <- plot_bootstrap_ratios(result, lv = 1,
+       colors = my_colors, font_sizes = my_fonts)
+```
+
+## Mean-Centering Types
+
+Control how condition means are removed:
+
+| Type | Description | Effect |
+|------|-------------|--------|
+| 0 | Remove group condition means | Emphasize condition differences within groups |
+| 1 | Remove grand condition means | Emphasize group differences |
+| 2 | Remove grand mean | Overall centering |
+| 3 | Remove all main effects | Interaction effects only |
+
+```{r meancentering, eval=FALSE}
+result <- pls_analysis(
+  datamat_lst = list(datamat1, datamat2),
+  num_subj_lst = c(10, 10),
+  num_cond = 3,
+  option = list(
+    method = 1,
+    meancentering_type = 1,  # Boost group differences
+    num_perm = 500,
+    num_boot = 500
+  )
+)
+```
+
+## Best Practices
+
+### Sample Size Guidelines
+
+- Minimum ~10 subjects per group/condition
+- More subjects = more stable results
+- Bootstrap ratios more reliable with larger samples
+
+### Permutation and Bootstrap
+
+- Use at least 500-1000 permutations for publication
+- Use at least 500-1000 bootstrap samples
+- More is better for stable p-values and CIs
+
+### Interpreting Results
+
+1. **Check p-values** from permutation test for significant LVs
+2. **Examine design saliences** (v) to understand condition patterns
+3. **Use bootstrap ratios** (|BSR| > 2) to identify reliable brain regions
+4. **Report confidence intervals** for brain-behavior correlations
+
+### When to Use Robust Methods
+
+- Data contains known outliers
+- Non-normal distributions
+- Small sample sizes (more sensitive to outliers)
+- Exploratory analysis to check robustness
+
+## Troubleshooting
+
+### Common Issues
+
+**"Not enough subjects"**: Ensure each group has sufficient subjects for the number of conditions.
+
+**"Behavior data wrong size"**: Rows in behavior data must match rows in stacked brain data.
+
+**"Singular matrix"**: May indicate collinear variables; consider reducing dimensionality.
+
+### Getting Help
+
+```{r help, eval=FALSE}
+# Function documentation
+?pls_analysis
+?plot_bootstrap_ratios
+?robust_cor
+
+# Package documentation
+help(package = "plscmd")
+```
+
+## References
+
+McIntosh, A.R., & Lobaugh, N.J. (2004). Partial least squares analysis of neuroimaging data: applications and advances. NeuroImage, 23, S250-S263.
+
+Krishnan, A., Williams, L.J., McIntosh, A.R., & Abdi, H. (2011). Partial Least Squares (PLS) methods for neuroimaging: A tutorial and review. NeuroImage, 56(2), 455-475.
+
+## Session Info
+
+```{r session}
+sessionInfo()
+```
