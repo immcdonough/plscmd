@@ -398,6 +398,92 @@ The `pls_colors()` function returns a list with the following customizable color
 | `bar_fill` | gray50 | General bar fill |
 | `bar_outline` | black | Bar outlines |
 
+## Handling Missing Data
+
+The package provides comprehensive missing data handling through single imputation and multiple imputation with proper statistical pooling.
+
+### Checking for Missing Data
+
+```r
+# Diagnose missing data patterns
+report <- pls_check_missing(list(data1, data2), behavdata = behav)
+print(report)
+```
+
+Warning thresholds (based on methodological literature):
+- **>5%**: Informational message
+- **>20%**: Warning
+- **>50%**: Strong warning (consider variable removal)
+
+### Single Imputation
+
+For quick analyses, use single imputation directly in `pls_analysis()`:
+
+```r
+# Mean imputation (fast, simple)
+result <- pls_analysis(
+  datamat_lst = list(data_with_na),
+  num_subj_lst = c(n),
+  num_cond = k,
+  option = list(
+    method = 1,
+    impute_method = "mean",  # or "rf" for random forest
+    num_perm = 500
+  )
+)
+
+# Random forest imputation (recommended, preserves relationships)
+result <- pls_analysis(
+  datamat_lst = list(data_with_na),
+  num_subj_lst = c(n),
+  num_cond = k,
+  option = list(
+    method = 1,
+    impute_method = "rf",
+    num_perm = 500
+  )
+)
+```
+
+### Multiple Imputation (Recommended)
+
+For publishable results, use `pls_analysis_mi()` which properly pools results using Rubin's rules:
+
+```r
+# Install required package
+install.packages("missRanger")
+
+# Run PLS with multiple imputation
+result <- pls_analysis_mi(
+  datamat_lst = list(data_with_na),
+  num_subj_lst = c(n),
+  num_cond = k,
+  option = list(
+    method = 1,
+    num_perm = 500,
+    num_boot = 500
+  ),
+  mi_option = list(
+    method = "rf",      # Random forest imputation
+    m = 5,              # Number of imputations (default)
+    pmm = TRUE,         # Predictive mean matching
+    seed = 42           # For reproducibility
+  )
+)
+
+# View pooled p-values (median method)
+print(result$perm_result$sprob)
+
+# View p-value range across imputations
+print(result$perm_result$sprob_all)
+```
+
+**Pooling Strategy:**
+- Point estimates (u, v, s): Procrustes alignment across imputations, then Rubin's rules averaging
+- Bootstrap ratios: Pooled using Rubin's rules (within + between variance)
+- Permutation p-values: Median p-value method
+- Fraction of missing information (FMI) is reported for transparency
+
 ## PLS Methods
 
 ### Method 1: Mean-Centering Task PLS

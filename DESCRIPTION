@@ -38,6 +38,8 @@ Suggests:
     patchwork (>= 1.1.0),
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    missRanger (>= 2.1.0),
+    mice (>= 3.14.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
