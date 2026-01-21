@@ -77,16 +77,18 @@ test_that("rri_xcor computes correlations correctly", {
 
 test_that("rri_task_mean computes condition means correctly", {
   # 2 conditions, 3 subjects each
+  # Column 1: condition 1 = [1,2,3], condition 2 = [4,5,6]
+  # Column 2: condition 1 = [7,8,9], condition 2 = [10,11,12]
   datamat <- matrix(c(
-    1, 2, 3,  # Condition 1, subjects 1-3
-    4, 5, 6,  # Condition 2, subjects 1-3
-    7, 8, 9,
-    10, 11, 12
-  ), nrow = 6, ncol = 2, byrow = TRUE)
+    1, 2, 3, 4, 5, 6,      # Column 1
+    7, 8, 9, 10, 11, 12    # Column 2
+  ), nrow = 6, ncol = 2)
 
   result <- rri_task_mean(datamat, n = 3)
 
   expect_equal(nrow(result), 2)  # 2 conditions
   expect_equal(result[1, 1], 2)  # Mean of 1, 2, 3
   expect_equal(result[2, 1], 5)  # Mean of 4, 5, 6
+  expect_equal(result[1, 2], 8)  # Mean of 7, 8, 9
+  expect_equal(result[2, 2], 11) # Mean of 10, 11, 12
 })
