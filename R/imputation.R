@@ -450,13 +450,15 @@ pls_impute <- function(datamat_lst,
         # Use different seed for each imputation to get variation
         imp_seed <- if (!is.null(seed)) seed + i - 1 else NULL
 
+        # Call missRanger with core parameters
+        # num.trees is passed via ... to ranger
         imputed_df <- missRanger::missRanger(
-          df,
+          data = df,
           maxiter = maxiter,
           pmm.k = if (pmm) 3 else 0,
-          num.trees = num.trees,
           seed = imp_seed,
-          verbose = 0
+          verbose = 0,
+          num.trees = num.trees
         )
 
         imputed_datamat_lst[[g]] <- as.matrix(imputed_df)
@@ -476,13 +478,14 @@ pls_impute <- function(datamat_lst,
         df <- as.data.frame(behavdata_mat)
         imp_seed <- if (!is.null(seed)) seed + i - 1 + 1000 else NULL
 
+        # Call missRanger with core parameters
         imputed_df <- missRanger::missRanger(
-          df,
+          data = df,
           maxiter = maxiter,
           pmm.k = if (pmm) 3 else 0,
-          num.trees = num.trees,
           seed = imp_seed,
-          verbose = 0
+          verbose = 0,
+          num.trees = num.trees
         )
 
         imputed_behavdata <- as.matrix(imputed_df)
