@@ -20,8 +20,7 @@ A named list of colors with elements:
   \item{bar_outline}{Color for bar outlines}
 }
 }
-\description
-{
+\description{
 Returns the default color palette used in PLS visualizations.
 Can be customized by modifying the returned list and passing to plotting functions.
 }
