@@ -32,6 +32,19 @@ export(missvar)
 export(misssum)
 export(misssvd)
 
+# Export imputation functions
+export(pls_check_missing)
+export(pls_impute)
+export(pls_analysis_mi)
+export(pool_estimates)
+export(pool_pvalues)
+export(pool_pls_results)
+
+# S3 methods for imputation classes
+S3method(print, pls_missing_report)
+S3method(print, pls_mi_data)
+S3method(print, pls_mi_result)
+
 # Export visualization functions
 export(pls_summary_table)
 export(theme_pls)
