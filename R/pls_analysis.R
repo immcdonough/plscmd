@@ -35,6 +35,10 @@
 #'       "none" (default), "spearman", "winsorized", "biweight", "percentage_bend"}
 #'     \item{robust_trim}{Trim proportion for winsorized correlation (default 0.1)}
 #'     \item{robust_beta}{Bend constant for percentage bend correlation (default 0.2)}
+#'     \item{impute_method}{Missing data imputation method: "none" (default, error on NA),
+#'       "mean" (mean imputation), or "rf" (random forest via missRanger)}
+#'     \item{check_missing}{Check for missing data and print report (default TRUE)}
+#'     \item{missing_warn_threshold}{Threshold for missing data warning (default 0.05 = 5\%)}
 #'   }
 #'
 #' @return A list with class "pls_result" containing:
@@ -122,6 +126,9 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
   robust_method <- "none"
   robust_trim <- 0.1
   robust_beta <- 0.2
+  impute_method <- "none"
+  check_missing <- TRUE
+  missing_warn_threshold <- 0.05
 
   # Parse options
   if (!is.null(option)) {
@@ -233,6 +240,25 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
         stop("robust_beta should be between 0 and 0.5 (exclusive)")
       }
     }
+
+    # Missing data options
+    if (!is.null(option$impute_method)) {
+      impute_method <- tolower(option$impute_method)
+      if (!impute_method %in% c("none", "mean", "rf")) {
+        stop("impute_method should be 'none', 'mean', or 'rf'")
+      }
+    }
+
+    if (!is.null(option$check_missing)) {
+      check_missing <- option$check_missing
+    }
+
+    if (!is.null(option$missing_warn_threshold)) {
+      missing_warn_threshold <- option$missing_warn_threshold
+      if (missing_warn_threshold <= 0 || missing_warn_threshold >= 1) {
+        stop("missing_warn_threshold should be between 0 and 1 (exclusive)")
+      }
+    }
   }
 
   # Initialize
@@ -250,6 +276,55 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
     }
     if (nrow(stacked_behavdata) != total_rows) {
       stop(sprintf("Wrong number of rows in behavior data, should be %d", total_rows))
+    }
+  }
+
+  # Check for missing data and handle imputation
+  has_missing_data <- any(sapply(datamat_lst, function(x) any(is.na(x))))
+  has_missing_behav <- !is.null(stacked_behavdata) && any(is.na(stacked_behavdata))
+  has_any_missing <- has_missing_data || has_missing_behav
+
+  if (has_any_missing) {
+    # Check and report missing data if requested
+    if (check_missing && verbose) {
+      missing_report <- pls_check_missing(
+        datamat_lst,
+        behavdata = stacked_behavdata,
+        warn_threshold = missing_warn_threshold,
+        verbose = TRUE
+      )
+    }
+
+    if (impute_method == "none") {
+      stop("Missing data (NA) detected in input matrices. ",
+           "Either:\n",
+           "  1. Remove or impute missing values before calling pls_analysis()\n",
+           "  2. Set option$impute_method = 'mean' or 'rf' for automatic imputation\n",
+           "  3. Use pls_analysis_mi() for multiple imputation with proper pooling\n",
+           "Use pls_check_missing() to diagnose the extent of missing data.")
+    }
+
+    # Perform single imputation
+    if (verbose) {
+      message(sprintf("Imputing missing data using %s method...",
+                      ifelse(impute_method == "rf", "random forest", "mean")))
+    }
+
+    imputed <- pls_impute(
+      datamat_lst,
+      behavdata = stacked_behavdata,
+      method = impute_method,
+      m = 1,
+      verbose = FALSE
+    )
+
+    datamat_lst <- imputed$datamat_lst
+    if (!is.null(stacked_behavdata)) {
+      stacked_behavdata <- imputed$behavdata
+    }
+
+    if (verbose) {
+      message("Imputation complete.")
     }
   }
 
@@ -909,6 +984,14 @@ pls_analysis <- function(datamat_lst, num_subj_lst, num_cond, option = NULL) {
     meancentering_type = meancentering_type,
     cormode = cormode
   )
+
+  # Save imputation info if used
+  if (exists("has_any_missing") && has_any_missing && impute_method != "none") {
+    result$imputation_info <- list(
+      was_imputed = TRUE,
+      method = impute_method
+    )
+  }
 
   class(result) <- "pls_result"
 
