@@ -207,7 +207,7 @@ plot_behavior_correlations <- function(result, lv = 1, behav_names = NULL,
               font_sizes$axis_title_size, font_sizes$axis_text_size) +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
-      axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = 5, l = 0)),
+      axis.title.y = ggplot2::element_text(vjust = 1),
       plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5)
     )
 
@@ -299,7 +299,7 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
     theme_pls(font_sizes$base_size, font_sizes$title_size,
               font_sizes$axis_title_size, font_sizes$axis_text_size) +
     ggplot2::theme(
-      axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 5, b = 0)),
+      axis.title.x = ggplot2::element_text(vjust = 1),
       plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5)
     )
 
