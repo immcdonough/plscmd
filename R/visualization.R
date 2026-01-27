@@ -205,7 +205,11 @@ plot_behavior_correlations <- function(result, lv = 1, behav_names = NULL,
     ) +
     theme_pls(font_sizes$base_size, font_sizes$title_size,
               font_sizes$axis_title_size, font_sizes$axis_text_size) +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+      axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = 5, l = 0)),
+      plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5)
+    )
 
   return(p)
 }
@@ -221,6 +225,9 @@ plot_behavior_correlations <- function(result, lv = 1, behav_names = NULL,
 #' @param font_sizes Named list with base_size, title_size, axis_title_size, axis_text_size
 #' @param point_size Numeric; size of scatter points (default: 3)
 #' @param point_alpha Numeric; transparency of points 0-1 (default: 0.7)
+#' @param p_digits Integer; number of decimal places for p-value display.
+#'   If NULL (default), uses scientific notation for very small values.
+#'   Set to 3 for fixed 3 decimal places.
 #'
 #' @return A ggplot2 object
 #'
@@ -234,7 +241,7 @@ plot_behavior_correlations <- function(result, lv = 1, behav_names = NULL,
 #' }
 plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
                                          font_sizes = NULL, point_size = 3,
-                                         point_alpha = 0.7) {
+                                         point_alpha = 0.7, p_digits = NULL) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. Please install it.")
   }
@@ -258,6 +265,14 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
   r_val <- stats::cor(vsc, usc)
   p_val <- stats::cor.test(vsc, usc)$p.value
 
+  # Format p-value
+  if (is.null(p_digits)) {
+    p_label <- sprintf("r = %.2f, p = %.3g", r_val, p_val)
+  } else {
+    p_format <- paste0("%.", p_digits, "f")
+    p_label <- sprintf(paste0("r = %.2f, p = ", p_format), r_val, p_val)
+  }
+
   # Create data frame
   plot_df <- data.frame(
     Behavior_Score = vsc,
@@ -274,7 +289,7 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
     ggplot2::annotate("text",
                       x = min(vsc) + 0.05 * diff(range(vsc)),
                       y = max(usc) - 0.05 * diff(range(usc)),
-                      label = sprintf("r = %.2f, p = %.3g", r_val, p_val),
+                      label = p_label,
                       hjust = 0, fontface = "bold",
                       size = font_sizes$axis_text_size / 2.5) +
     ggplot2::labs(
@@ -282,7 +297,11 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
       x = "Behavior Score", y = "Brain Score"
     ) +
     theme_pls(font_sizes$base_size, font_sizes$title_size,
-              font_sizes$axis_title_size, font_sizes$axis_text_size)
+              font_sizes$axis_title_size, font_sizes$axis_text_size) +
+    ggplot2::theme(
+      axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 5, b = 0)),
+      plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5)
+    )
 
   return(p)
 }
@@ -559,6 +578,11 @@ plot_lv_correlations <- function(result, lv = 1, behav_names = NULL,
 #' @param dpi Numeric; resolution for saved figure (default: 300)
 #' @param show_all_regions Logical; if TRUE, show all brain regions in bootstrap
 #'   ratio plot with non-significant ones in light gray (default: FALSE)
+#' @param p_digits Integer; number of decimal places for p-value display.
+#'   If NULL (default), uses 4 decimal places for title and scientific notation
+#'   for scatter plot. Set to 3 for fixed 3 decimal places everywhere.
+#' @param tag_levels Character; panel tag style. Use "A" for letters (A, B, C),
+#'   "1" for numbers (1, 2, 3), or NULL for no tags (default).
 #'
 #' @return A patchwork object combining the plots, or NULL if LV not significant
 #'
@@ -569,13 +593,15 @@ plot_lv_correlations <- function(result, lv = 1, behav_names = NULL,
 #' result <- pls_analysis(...)
 #' fig <- plot_lv_summary(result, lv = 1,
 #'          behav_names = c("RT", "Accuracy"),
-#'          save_path = "LV1_summary.png")
+#'          save_path = "LV1_summary.png",
+#'          tag_levels = "A")  # Add A, B, C tags
 #' }
 plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
                              region_names = NULL, colors = NULL,
                              font_sizes = NULL, save_path = NULL,
                              width = 12, height = 10, dpi = 300,
-                             show_all_regions = FALSE) {
+                             show_all_regions = FALSE, p_digits = NULL,
+                             tag_levels = NULL) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. Please install it.")
   }
@@ -593,17 +619,27 @@ plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
   p1 <- plot_behavior_correlations(result, lv, behav_names, colors = colors,
                                     font_sizes = font_sizes)
   p2 <- plot_brain_behavior_scatter(result, lv, colors = colors,
-                                     font_sizes = font_sizes)
+                                     font_sizes = font_sizes, p_digits = p_digits)
   p3 <- plot_bootstrap_ratios(result, lv, region_names, colors = colors,
                                font_sizes = font_sizes, show_all = show_all_regions)
+
+  # Format p-value for title
+  p_val <- result$perm_result$sprob[lv]
+  if (is.null(p_digits)) {
+    title_text <- sprintf("Latent Variable %d Summary (p = %.4f)", lv, p_val)
+  } else {
+    p_format <- paste0("%.", p_digits, "f")
+    title_text <- sprintf(paste0("Latent Variable %d Summary (p = ", p_format, ")"), lv, p_val)
+  }
 
   # Combine with patchwork
   combined <- (p1 | p2) / p3 +
     patchwork::plot_annotation(
-      title = sprintf("Latent Variable %d Summary (p = %.4f)",
-                      lv, result$perm_result$sprob[lv]),
+      title = title_text,
+      tag_levels = tag_levels,
       theme = ggplot2::theme(
-        plot.title = ggplot2::element_text(face = "bold", size = 16, hjust = 0.5)
+        plot.title = ggplot2::element_text(face = "bold", size = 16, hjust = 0.5),
+        plot.tag = ggplot2::element_text(face = "bold", size = 14)
       )
     )
 
@@ -633,6 +669,11 @@ plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
 #' @param dpi Numeric; resolution for saved figures (default: 300)
 #' @param show_all_regions Logical; if TRUE, show all brain regions in bootstrap
 #'   ratio plots with non-significant ones in light gray (default: FALSE)
+#' @param p_digits Integer; number of decimal places for p-value display.
+#'   If NULL (default), uses 4 decimal places for title and scientific notation
+#'   for scatter plot. Set to 3 for fixed 3 decimal places everywhere.
+#' @param tag_levels Character; panel tag style. Use "A" for letters (A, B, C),
+#'   "1" for numbers (1, 2, 3), or NULL for no tags (default).
 #'
 #' @return A list of patchwork objects, one per significant LV
 #'
@@ -643,14 +684,17 @@ plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
 #' result <- pls_analysis(...)
 #' figures <- plot_all_significant_lvs(result,
 #'              behav_names = c("Age", "IQ"),
-#'              output_dir = "figures")
+#'              output_dir = "figures",
+#'              tag_levels = "A")  # Add A, B, C tags
 #' }
 plot_all_significant_lvs <- function(result, behav_names = NULL,
                                       region_names = NULL, colors = NULL,
                                       font_sizes = NULL, output_dir = ".",
                                       prefix = "LV", width = 12,
                                       height = 10, dpi = 300,
-                                      show_all_regions = FALSE) {
+                                      show_all_regions = FALSE,
+                                      p_digits = NULL,
+                                      tag_levels = NULL) {
   sig_lvs <- which(result$perm_result$sprob < 0.05)
 
   if (length(sig_lvs) == 0) {
@@ -673,7 +717,8 @@ plot_all_significant_lvs <- function(result, behav_names = NULL,
       result, lv, behav_names, region_names,
       colors = colors, font_sizes = font_sizes,
       save_path = save_path, width = width, height = height, dpi = dpi,
-      show_all_regions = show_all_regions
+      show_all_regions = show_all_regions, p_digits = p_digits,
+      tag_levels = tag_levels
     )
   }
 
