@@ -301,6 +301,8 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
 #' @param colors Named list of colors (see \code{\link{pls_colors}})
 #' @param font_sizes Named list with base_size, title_size, axis_title_size, axis_text_size
 #' @param horizontal Logical; if TRUE, bars are horizontal (default: TRUE)
+#' @param show_all Logical; if TRUE, show all regions with non-significant ones in
+#'   light gray. If FALSE (default), only show significant regions.
 #'
 #' @return A ggplot2 object
 #'
@@ -308,6 +310,13 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
 #' A region is considered reliably significant only if the lower bound of its
 #' bootstrap ratio confidence interval (|BSR| - SE) exceeds the threshold.
 #' This is more conservative than simply checking if |BSR| > threshold.
+#'
+#' When \code{show_all = TRUE}, all regions are displayed with:
+#' \itemize{
+#'   \item Significant positive BSR: red (colors$positive)
+#'   \item Significant negative BSR: blue (colors$negative)
+#'   \item Non-significant: light gray (colors$nonsignificant)
+#' }
 #'
 #' @export
 #'
@@ -321,7 +330,7 @@ plot_brain_behavior_scatter <- function(result, lv = 1, colors = NULL,
 plot_bootstrap_ratios <- function(result, lv = 1, region_names = NULL,
                                    threshold = 1.96, top_n = 30,
                                    colors = NULL, font_sizes = NULL,
-                                   horizontal = TRUE) {
+                                   horizontal = TRUE, show_all = FALSE) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. Please install it.")
   }
@@ -356,42 +365,82 @@ plot_bootstrap_ratios <- function(result, lv = 1, region_names = NULL,
     Significant = significant
   )
 
-  # Filter to significant regions (lower bound > threshold)
-  if (sum(plot_df$Significant) > 0) {
-    plot_df <- plot_df[plot_df$Significant, ]
+  if (show_all) {
+    # Show all regions with non-significant in gray
+    # Create fill category: "pos_sig", "neg_sig", or "nonsig"
+    plot_df$FillCategory <- ifelse(!plot_df$Significant, "nonsig",
+                                    ifelse(plot_df$BSR > 0, "pos_sig", "neg_sig"))
+
+    # Sort by BSR value
+    plot_df <- plot_df[order(plot_df$BSR, decreasing = TRUE), ]
+    plot_df$Region <- factor(plot_df$Region, levels = plot_df$Region)
+
+    # Create plot with three-color scheme
+    p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data$Region, y = .data$BSR,
+                                                fill = .data$FillCategory)) +
+      ggplot2::geom_bar(stat = "identity", color = colors$bar_outline, width = 0.7) +
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$BSR - .data$SE,
+                                           ymax = .data$BSR + .data$SE),
+                             width = 0.2, linewidth = 0.6) +
+      ggplot2::geom_hline(yintercept = c(-threshold, threshold),
+                          linetype = "dashed", color = "gray40", linewidth = 0.8) +
+      ggplot2::geom_hline(yintercept = c(-3.3, 3.3),
+                          linetype = "dotted", color = "gray40", linewidth = 0.8) +
+      ggplot2::scale_fill_manual(
+        values = c("pos_sig" = colors$positive,
+                   "neg_sig" = colors$negative,
+                   "nonsig" = colors$nonsignificant),
+        labels = c("pos_sig" = "Positive (sig.)",
+                   "neg_sig" = "Negative (sig.)",
+                   "nonsig" = "Non-significant"),
+        name = ""
+      ) +
+      ggplot2::labs(
+        title = sprintf("Bootstrap Ratios (LV%d)", lv),
+        subtitle = "Dashed: p < .05, Dotted: p < .001 (CI lower bound must exceed threshold)",
+        x = "", y = "Bootstrap Ratio"
+      ) +
+      theme_pls(font_sizes$base_size, font_sizes$title_size,
+                font_sizes$axis_title_size, font_sizes$axis_text_size)
+
   } else {
-    # If none significant, show top N by lower bound
-    plot_df <- plot_df[order(plot_df$Lower_Bound, decreasing = TRUE)[1:min(top_n, n_regions)], ]
-    message(sprintf("No regions with lower bound CI > %.2f. Showing top %d by |BSR| - SE.",
-                    threshold, min(top_n, n_regions)))
+    # Original behavior: filter to significant regions only
+    if (sum(plot_df$Significant) > 0) {
+      plot_df <- plot_df[plot_df$Significant, ]
+    } else {
+      # If none significant, show top N by lower bound
+      plot_df <- plot_df[order(plot_df$Lower_Bound, decreasing = TRUE)[1:min(top_n, n_regions)], ]
+      message(sprintf("No regions with lower bound CI > %.2f. Showing top %d by |BSR| - SE.",
+                      threshold, min(top_n, n_regions)))
+    }
+
+    # Sort by BSR value
+    plot_df <- plot_df[order(plot_df$BSR, decreasing = TRUE), ]
+    plot_df$Region <- factor(plot_df$Region, levels = plot_df$Region)
+
+    # Create plot
+    p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data$Region, y = .data$BSR,
+                                                fill = .data$BSR > 0)) +
+      ggplot2::geom_bar(stat = "identity", color = colors$bar_outline, width = 0.7) +
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$BSR - .data$SE,
+                                           ymax = .data$BSR + .data$SE),
+                             width = 0.2, linewidth = 0.6) +
+      ggplot2::geom_hline(yintercept = c(-threshold, threshold),
+                          linetype = "dashed", color = "gray40", linewidth = 0.8) +
+      ggplot2::geom_hline(yintercept = c(-3.3, 3.3),
+                          linetype = "dotted", color = "gray40", linewidth = 0.8) +
+      ggplot2::scale_fill_manual(
+        values = c("TRUE" = colors$positive, "FALSE" = colors$negative),
+        guide = "none"
+      ) +
+      ggplot2::labs(
+        title = sprintf("Bootstrap Ratios (LV%d)", lv),
+        subtitle = "Dashed: p < .05, Dotted: p < .001 (CI lower bound must exceed threshold)",
+        x = "", y = "Bootstrap Ratio"
+      ) +
+      theme_pls(font_sizes$base_size, font_sizes$title_size,
+                font_sizes$axis_title_size, font_sizes$axis_text_size)
   }
-
-  # Sort by BSR value
-  plot_df <- plot_df[order(plot_df$BSR, decreasing = TRUE), ]
-  plot_df$Region <- factor(plot_df$Region, levels = plot_df$Region)
-
-  # Create plot
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data$Region, y = .data$BSR,
-                                              fill = .data$BSR > 0)) +
-    ggplot2::geom_bar(stat = "identity", color = colors$bar_outline, width = 0.7) +
-    ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$BSR - .data$SE,
-                                         ymax = .data$BSR + .data$SE),
-                           width = 0.2, linewidth = 0.6) +
-    ggplot2::geom_hline(yintercept = c(-threshold, threshold),
-                        linetype = "dashed", color = "gray40", linewidth = 0.8) +
-    ggplot2::geom_hline(yintercept = c(-3.3, 3.3),
-                        linetype = "dotted", color = "gray40", linewidth = 0.8) +
-    ggplot2::scale_fill_manual(
-      values = c("TRUE" = colors$positive, "FALSE" = colors$negative),
-      guide = "none"
-    ) +
-    ggplot2::labs(
-      title = sprintf("Bootstrap Ratios (LV%d)", lv),
-      subtitle = "Dashed: p < .05, Dotted: p < .001 (CI lower bound must exceed threshold)",
-      x = "", y = "Bootstrap Ratio"
-    ) +
-    theme_pls(font_sizes$base_size, font_sizes$title_size,
-              font_sizes$axis_title_size, font_sizes$axis_text_size)
 
   if (horizontal) {
     p <- p + ggplot2::coord_flip()
@@ -508,6 +557,8 @@ plot_lv_correlations <- function(result, lv = 1, behav_names = NULL,
 #' @param width Numeric; figure width in inches (default: 12)
 #' @param height Numeric; figure height in inches (default: 10)
 #' @param dpi Numeric; resolution for saved figure (default: 300)
+#' @param show_all_regions Logical; if TRUE, show all brain regions in bootstrap
+#'   ratio plot with non-significant ones in light gray (default: FALSE)
 #'
 #' @return A patchwork object combining the plots, or NULL if LV not significant
 #'
@@ -523,7 +574,8 @@ plot_lv_correlations <- function(result, lv = 1, behav_names = NULL,
 plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
                              region_names = NULL, colors = NULL,
                              font_sizes = NULL, save_path = NULL,
-                             width = 12, height = 10, dpi = 300) {
+                             width = 12, height = 10, dpi = 300,
+                             show_all_regions = FALSE) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. Please install it.")
   }
@@ -543,7 +595,7 @@ plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
   p2 <- plot_brain_behavior_scatter(result, lv, colors = colors,
                                      font_sizes = font_sizes)
   p3 <- plot_bootstrap_ratios(result, lv, region_names, colors = colors,
-                               font_sizes = font_sizes)
+                               font_sizes = font_sizes, show_all = show_all_regions)
 
   # Combine with patchwork
   combined <- (p1 | p2) / p3 +
@@ -579,6 +631,8 @@ plot_lv_summary <- function(result, lv = 1, behav_names = NULL,
 #' @param width Numeric; figure width in inches (default: 12)
 #' @param height Numeric; figure height in inches (default: 10)
 #' @param dpi Numeric; resolution for saved figures (default: 300)
+#' @param show_all_regions Logical; if TRUE, show all brain regions in bootstrap
+#'   ratio plots with non-significant ones in light gray (default: FALSE)
 #'
 #' @return A list of patchwork objects, one per significant LV
 #'
@@ -595,7 +649,8 @@ plot_all_significant_lvs <- function(result, behav_names = NULL,
                                       region_names = NULL, colors = NULL,
                                       font_sizes = NULL, output_dir = ".",
                                       prefix = "LV", width = 12,
-                                      height = 10, dpi = 300) {
+                                      height = 10, dpi = 300,
+                                      show_all_regions = FALSE) {
   sig_lvs <- which(result$perm_result$sprob < 0.05)
 
   if (length(sig_lvs) == 0) {
@@ -617,7 +672,8 @@ plot_all_significant_lvs <- function(result, behav_names = NULL,
     figures[[lv]] <- plot_lv_summary(
       result, lv, behav_names, region_names,
       colors = colors, font_sizes = font_sizes,
-      save_path = save_path, width = width, height = height, dpi = dpi
+      save_path = save_path, width = width, height = height, dpi = dpi,
+      show_all_regions = show_all_regions
     )
   }
 

@@ -914,6 +914,14 @@ pool_pls_results <- function(results_list, align_lvs = TRUE, reference_idx = 1) 
   pooled$other_input <- ref$other_input
   pooled$individual_results <- results_list
 
+  # Copy behavioral and design data for plotting functions
+  if (!is.null(ref$stacked_behavdata)) {
+    pooled$stacked_behavdata <- ref$stacked_behavdata
+  }
+  if (!is.null(ref$stacked_designdata)) {
+    pooled$stacked_designdata <- ref$stacked_designdata
+  }
+
   class(pooled) <- c("pls_mi_result", "pls_result")
   return(pooled)
 }
