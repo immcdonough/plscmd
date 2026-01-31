@@ -416,7 +416,6 @@ plot_bootstrap_ratios <- function(result, lv = 1, region_names = NULL,
       ) +
       ggplot2::labs(
         title = sprintf("Bootstrap Ratios (LV%d)", lv),
-        subtitle = "Dashed: p < .05, Dotted: p < .001 (CI lower bound must exceed threshold)",
         x = "", y = "Bootstrap Ratio"
       ) +
       theme_pls(font_sizes$base_size, font_sizes$title_size,
@@ -454,7 +453,6 @@ plot_bootstrap_ratios <- function(result, lv = 1, region_names = NULL,
       ) +
       ggplot2::labs(
         title = sprintf("Bootstrap Ratios (LV%d)", lv),
-        subtitle = "Dashed: p < .05, Dotted: p < .001 (CI lower bound must exceed threshold)",
         x = "", y = "Bootstrap Ratio"
       ) +
       theme_pls(font_sizes$base_size, font_sizes$title_size,
