@@ -11,15 +11,18 @@ Authors@R: c(
     person("Claude", "AI", role = "ctb",
            comment = "R implementation assistance"))
 Description: Comprehensive Partial Least Squares (PLS) analysis toolkit for
-    neuroimaging data. Includes six PLS methods: Mean-Centering Task PLS,
-    Non-Rotated Task PLS, Regular Behavior PLS, Multiblock PLS,
-    Non-Rotated Behavior PLS, and Non-Rotated Multiblock PLS.
+    neuroimaging data. Includes six PLS methods for design-based analysis:
+    Mean-Centering Task PLS, Non-Rotated Task PLS, Regular Behavior PLS,
+    Multiblock PLS, Non-Rotated Behavior PLS, and Non-Rotated Multiblock PLS.
+    Also includes PLS regression for predicting continuous outcomes from
+    high-dimensional predictors using SIMPLS or NIPALS algorithms with
+    cross-validation, VIP scores, and prediction capabilities.
     Supports permutation testing for statistical significance,
-    bootstrap resampling for confidence intervals, and split-half
-    validation for reliability assessment. Handles missing data
-    through specialized functions. Includes publication-quality
-    visualization functions. This is an R port of the MATLAB
-    PLS command line tools developed at the Rotman Research Institute.
+    bootstrap resampling for confidence intervals, multiple imputation
+    for missing data, and robust correlation methods for outliers.
+    Includes publication-quality visualization functions.
+    This is an R port of the MATLAB PLS command line tools developed
+    at the Rotman Research Institute.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
@@ -32,7 +35,8 @@ Depends:
 Imports:
     stats,
     utils,
-    rlang
+    rlang,
+    MASS
 Suggests:
     ggplot2 (>= 3.4.0),
     patchwork (>= 1.1.0),

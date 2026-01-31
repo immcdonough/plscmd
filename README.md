@@ -12,13 +12,20 @@ Tested on R 4.3.x and R 4.4.x.
 
 ## Features
 
-- **Six PLS Methods:**
+- **Six Design-Based PLS Methods:**
   1. Mean-Centering Task PLS
   2. Non-Rotated Task PLS
   3. Regular Behavior PLS
   4. Multiblock PLS
   5. Non-Rotated Behavior PLS
   6. Non-Rotated Multiblock PLS
+
+- **PLS Regression:**
+  - Predict continuous outcomes from high-dimensional predictors
+  - SIMPLS and NIPALS algorithms
+  - Cross-validation for component selection (k-fold, LOO)
+  - VIP (Variable Importance in Projection) scores
+  - Prediction on new data
 
 - **Statistical Inference:**
   - Permutation testing for significance of latent variables
@@ -61,10 +68,12 @@ help(package = "plscmd")
 
 # View function help
 ?pls_analysis
+?pls_regression
 ?plot_bootstrap_ratios
 
-# View user guide vignette (if installed with build_vignettes = TRUE)
+# View vignettes (if installed with build_vignettes = TRUE)
 vignette("plscmd-user-guide", package = "plscmd")
+vignette("pls-regression", package = "plscmd")
 
 # List all vignettes
 browseVignettes("plscmd")
@@ -120,6 +129,49 @@ result <- pls_analysis(
 
 # Brain-behavior correlations
 result$lvcorrs
+```
+
+### PLS Regression Example
+
+PLS regression predicts continuous outcomes from high-dimensional predictors:
+
+```r
+library(plscmd)
+
+# Simulate data: 100 subjects, 50 brain regions predicting behavior
+set.seed(42)
+n <- 100
+p <- 50
+X <- matrix(rnorm(n * p), n, p)
+Y <- X[, 1:5] %*% rep(1, 5) + rnorm(n, sd = 2)  # Y depends on first 5 regions
+
+# Cross-validation to select number of components
+cv <- pls_cv(X, Y, ncomp_max = 10, method = "kfold", k = 10)
+print(cv)
+plot(cv)
+
+# Fit model with optimal components
+fit <- pls_regression(X, Y, ncomp = cv$optimal_ncomp)
+print(fit)
+
+# Check variable importance
+vip <- fit$vip[, fit$ncomp]
+important <- which(vip > 1)
+cat("Important variables:", important, "\n")
+
+# Make predictions
+Y_pred <- predict(fit, X[1:10, ])
+
+# Bootstrap for confidence intervals
+fit_boot <- pls_regression_boot(X, Y, ncomp = cv$optimal_ncomp, num_boot = 1000)
+
+# Permutation test for significance
+fit_perm <- pls_regression_perm(X, Y, ncomp = cv$optimal_ncomp, num_perm = 1000)
+cat("P-value:", fit_perm$perm_result$p_value, "\n")
+
+# Visualization
+plot_vip(fit)
+plot_regression_summary(fit)
 ```
 
 ### Using Robust Correlations
@@ -186,9 +238,12 @@ Group 2:
 
 ## Key Functions
 
+### Design-Based PLS (pls_analysis)
+
 | Function | Description |
 |----------|-------------|
 | `pls_analysis()` | Main PLS analysis function |
+| `pls_analysis_mi()` | PLS with multiple imputation |
 | `pls_summary_table()` | Create summary table of LV statistics |
 | `plot_lv_summary()` | Create multi-panel summary figure |
 | `plot_all_significant_lvs()` | Generate figures for all significant LVs |
@@ -196,8 +251,29 @@ Group 2:
 | `plot_brain_behavior_scatter()` | Scatter plot of brain vs behavior scores |
 | `plot_bootstrap_ratios()` | Bar plot of bootstrap ratios |
 | `plot_lv_correlations()` | Bar plot of LV correlations |
+
+### PLS Regression
+
+| Function | Description |
+|----------|-------------|
+| `pls_regression()` | Fit PLS regression model |
+| `pls_cv()` | Cross-validation for component selection |
+| `pls_regression_boot()` | Bootstrap confidence intervals |
+| `pls_regression_perm()` | Permutation significance test |
+| `pls_regression_mi()` | PLS regression with multiple imputation |
+| `predict()` | Predict Y from new X data |
+| `plot_vip()` | Variable importance plot |
+| `plot_loadings()` | X/Y loadings plot |
+| `plot_regression_summary()` | Combined summary figure |
+
+### Utilities
+
+| Function | Description |
+|----------|-------------|
 | `robust_cor()` | Compute robust correlations |
 | `biweight_midcor()` | Biweight midcorrelation |
+| `pls_check_missing()` | Diagnose missing data patterns |
+| `pls_impute()` | Impute missing values |
 
 ## Result Structure
 

@@ -62,9 +62,37 @@ export(winsorized_cor)
 export(biweight_midcor)
 export(percentage_bend_cor)
 
+# Export PLS regression functions
+export(pls_regression)
+export(pls_regression_boot)
+export(pls_regression_perm)
+export(pls_regression_mi)
+export(pls_cv)
+export(pls_cv_1se)
+
+# S3 methods for PLS regression
+S3method(predict, pls_regression_result)
+S3method(print, pls_regression_result)
+S3method(summary, pls_regression_result)
+S3method(coef, pls_regression_result)
+S3method(print, pls_mi_regression_result)
+S3method(print, pls_cv_result)
+S3method(summary, pls_cv_result)
+S3method(plot, pls_cv_result)
+
+# Export PLS regression visualization functions
+export(plot_vip)
+export(plot_loadings)
+export(plot_predicted_vs_observed)
+export(plot_variance_explained)
+export(plot_regression_summary)
+
 # Import from base packages
 importFrom(stats, sd, var, cor, cov, runif, rnorm, complete.cases, cor.test, quantile, median, mad)
 importFrom(utils, head, tail)
 
 # Import .data pronoun for ggplot2 aes()
 importFrom(rlang, .data)
+
+# Import ginv from MASS for pseudo-inverse
+importFrom(MASS, ginv)
