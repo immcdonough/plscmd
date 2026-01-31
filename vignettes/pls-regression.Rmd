@@ -1,0 +1,363 @@
+---
+title: "PLS Regression: Predicting Outcomes from Brain Data"
+author: "plscmd package"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{PLS Regression: Predicting Outcomes from Brain Data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+PLS regression is a powerful technique for predicting continuous outcome variables (Y) from high-dimensional predictor matrices (X), particularly when predictors are highly correlated or when the number of predictors exceeds the number of observations.
+
+### When to Use PLS Regression
+
+- **High-dimensional predictors**: Many brain regions/voxels, few subjects
+- **Multicollinearity**: Brain regions are correlated
+- **Prediction goal**: Want to predict behavior, age, clinical scores from brain data
+- **Continuous outcomes**: Y is continuous (not categorical)
+
+### Comparison with pls_analysis()
+
+| Feature | `pls_analysis()` | `pls_regression()` |
+|---------|------------------|-------------------|
+| Purpose | Identify brain patterns across conditions | Predict outcomes from predictors |
+| Input X | Condition-structured brain data | Unstructured predictor matrix |
+| Input Y | Design matrix or behavior matrix | Continuous response variable(s) |
+| Output | Latent variables, condition loadings | Regression coefficients, predictions |
+| Best for | Experimental designs | Prediction/biomarker studies |
+
+## Getting Started
+
+```{r load, message=FALSE}
+library(plscmd)
+```
+
+## Example 1: Basic PLS Regression
+
+Let's predict a behavioral score from simulated brain data.
+
+```{r basic-example}
+set.seed(42)
+
+# Simulate data: 100 subjects, 50 brain regions
+n <- 100
+p <- 50
+
+# Brain data (X)
+X <- matrix(rnorm(n * p), n, p)
+colnames(X) <- paste0("Region", 1:p)
+
+# Behavioral score (Y) - depends on first 5 regions
+true_weights <- c(rep(1, 5), rep(0, p - 5))
+Y <- X %*% true_weights + rnorm(n, sd = 2)
+
+# Fit PLS regression with 5 components
+fit <- pls_regression(X, Y, ncomp = 5, verbose = FALSE)
+print(fit)
+```
+
+### Examining the Results
+
+```{r examine-results}
+# Variance explained per component
+cat("Cumulative R-squared:\n")
+round(fit$R2Y_cum, 3)
+
+# Top 10 VIP scores (variable importance)
+vip <- fit$vip[, fit$ncomp]
+top10 <- order(vip, decreasing = TRUE)[1:10]
+cat("\nTop 10 important regions:\n")
+data.frame(
+  Region = colnames(X)[top10],
+  VIP = round(vip[top10], 2)
+)
+```
+
+## Example 2: Cross-Validation for Component Selection
+
+Choosing the right number of components is crucial. Use cross-validation to avoid overfitting.
+
+```{r cross-validation}
+# K-fold cross-validation
+cv_result <- pls_cv(X, Y, ncomp_max = 10, method = "kfold", k = 10,
+                    verbose = FALSE)
+print(cv_result)
+```
+
+```{r cv-plot, fig.width=8, fig.height=4}
+# Plot CV results
+plot(cv_result, metric = "both")
+```
+
+```{r optimal-model}
+# Fit model with optimal number of components
+optimal_ncomp <- cv_result$optimal_ncomp
+fit_optimal <- pls_regression(X, Y, ncomp = optimal_ncomp, verbose = FALSE)
+
+cat("Optimal components:", optimal_ncomp, "\n")
+cat("CV Q-squared:", round(cv_result$Q2[optimal_ncomp], 3), "\n")
+cat("Training R-squared:", round(fit_optimal$R2Y_cum[optimal_ncomp], 3), "\n")
+```
+
+## Example 3: Making Predictions
+
+```{r predictions}
+# Split data into train/test
+set.seed(123)
+train_idx <- sample(n, 80)
+test_idx <- setdiff(1:n, train_idx)
+
+# Fit on training data
+fit_train <- pls_regression(X[train_idx, ], Y[train_idx],
+                            ncomp = optimal_ncomp, verbose = FALSE)
+
+# Predict on test data
+Y_pred <- predict(fit_train, X[test_idx, ])
+
+# Evaluate predictions
+cor_test <- cor(Y_pred, Y[test_idx])
+rmse_test <- sqrt(mean((Y_pred - Y[test_idx])^2))
+
+cat("Test correlation:", round(cor_test, 3), "\n")
+cat("Test RMSE:", round(rmse_test, 3), "\n")
+```
+
+```{r pred-plot, fig.width=5, fig.height=5}
+# Plot predicted vs observed
+plot(Y[test_idx], Y_pred,
+     xlab = "Observed", ylab = "Predicted",
+     main = "Test Set: Predicted vs Observed")
+abline(0, 1, col = "red", lty = 2)
+```
+
+## Example 4: Bootstrap Confidence Intervals
+
+Bootstrap resampling provides confidence intervals for coefficients and VIP scores.
+
+```{r bootstrap}
+# Bootstrap with 500 resamples (use 1000+ for publication)
+fit_boot <- pls_regression_boot(X, Y, ncomp = optimal_ncomp,
+                                 num_boot = 500, clim = 95,
+                                 verbose = FALSE)
+
+# Bootstrap ratios (coefficient / SE) - values > 2 are typically significant
+compare_B <- fit_boot$boot_result$compare_B
+n_sig <- sum(abs(compare_B) > 2)
+
+cat("Significant coefficients (|BSR| > 2):", n_sig, "of", p, "\n")
+```
+
+```{r boot-vip}
+# VIP with confidence intervals
+vip_ci <- data.frame(
+  Region = colnames(X)[top10],
+  VIP = round(fit_boot$vip[top10, optimal_ncomp], 2),
+  CI_low = round(fit_boot$boot_result$vip_ci_low[top10], 2),
+  CI_high = round(fit_boot$boot_result$vip_ci_high[top10], 2)
+)
+print(vip_ci)
+```
+
+## Example 5: Permutation Testing
+
+Test whether the model explains significantly more variance than expected by chance.
+
+```{r permutation}
+# Permutation test with 500 permutations (use 1000+ for publication)
+fit_perm <- pls_regression_perm(X, Y, ncomp = optimal_ncomp,
+                                 num_perm = 500, verbose = FALSE)
+
+cat("Observed R-squared:", round(fit_perm$perm_result$R2_observed, 3), "\n")
+cat("Permutation p-value:", round(fit_perm$perm_result$p_value, 4), "\n")
+```
+
+```{r perm-hist, fig.width=6, fig.height=4}
+# Visualize null distribution
+hist(fit_perm$perm_result$R2_perm, breaks = 30,
+     main = "Permutation Null Distribution",
+     xlab = "R-squared", col = "lightgray")
+abline(v = fit_perm$perm_result$R2_observed, col = "red", lwd = 2)
+legend("topright", "Observed", col = "red", lwd = 2)
+```
+
+## Example 6: Robust Methods for Outliers
+
+When data contains outliers, robust correlation methods can improve results.
+
+```{r robust}
+# Add outliers to data
+X_outlier <- X
+X_outlier[1:3, ] <- X_outlier[1:3, ] + 10  # 3 extreme observations
+
+# Standard PLS
+fit_standard <- pls_regression(X_outlier, Y, ncomp = 3,
+                                robust_method = "none", verbose = FALSE)
+
+# Robust PLS with Spearman correlation
+fit_robust <- pls_regression(X_outlier, Y, ncomp = 3,
+                              robust_method = "spearman", verbose = FALSE)
+
+cat("Standard R2:", round(fit_standard$R2Y_cum[3], 3), "\n")
+cat("Robust R2:", round(fit_robust$R2Y_cum[3], 3), "\n")
+```
+
+### Available Robust Methods
+
+| Method | Description | When to Use |
+|--------|-------------|-------------|
+| `"spearman"` | Rank-based correlation | General outlier protection |
+| `"winsorized"` | Trims extreme values | Known outliers at tails |
+| `"biweight"` | Downweights outliers | Robust to multiple outliers |
+| `"percentage_bend"` | Bends extreme values | Balance robustness/efficiency |
+
+## Example 7: Multiple Response Variables
+
+PLS regression can predict multiple outcomes simultaneously.
+
+```{r multivariate}
+# Multiple outcomes
+Y_multi <- cbind(
+  Behavior1 = X[, 1:3] %*% c(1, 1, 1) + rnorm(n),
+  Behavior2 = X[, 4:6] %*% c(1, -1, 0.5) + rnorm(n),
+  Behavior3 = X[, 1:2] %*% c(0.5, 0.5) + rnorm(n)
+)
+
+fit_multi <- pls_regression(X, Y_multi, ncomp = 5, verbose = FALSE)
+
+cat("R-squared for each response:\n")
+print(round(fit_multi$R2Y_cum[5, ], 3))
+```
+
+## Example 8: Handling Missing Data
+
+When data has missing values, use multiple imputation for unbiased estimates.
+(Requires the `missRanger` package)
+
+```{r missing-data, eval=FALSE}
+# Add missing values
+X_missing <- X
+X_missing[sample(length(X), 0.05 * length(X))] <- NA  # 5% missing
+
+# Multiple imputation PLS
+fit_mi <- pls_regression_mi(X_missing, Y, ncomp = 3, m = 5,
+                             impute_method = "rf", verbose = FALSE)
+
+print(fit_mi)
+```
+
+## Visualization
+
+The package provides publication-ready visualizations.
+
+```{r visualization, fig.width=10, fig.height=8, eval=requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("patchwork", quietly = TRUE)}
+# Combined summary figure
+plot_regression_summary(fit_optimal, var_names = colnames(X))
+```
+
+### Individual Plots
+
+```{r individual-plots, fig.width=8, fig.height=5, eval=requireNamespace("ggplot2", quietly = TRUE)}
+# VIP scores
+plot_vip(fit_optimal, var_names = colnames(X), top_n = 20)
+```
+
+```{r loadings-plot, fig.width=8, fig.height=5, eval=requireNamespace("ggplot2", quietly = TRUE)}
+# X loadings
+plot_loadings(fit_optimal, comp = 1, var_names = colnames(X), top_n = 20)
+```
+
+```{r variance-plot, fig.width=6, fig.height=4, eval=requireNamespace("ggplot2", quietly = TRUE)}
+# Variance explained
+plot_variance_explained(fit_optimal, type = "both")
+```
+
+## Algorithm Comparison
+
+Two algorithms are available: SIMPLS (default) and NIPALS.
+
+```{r algorithms}
+# SIMPLS (default) - faster, orthogonal scores
+fit_simpls <- pls_regression(X, Y, ncomp = 5, algorithm = "simpls",
+                              verbose = FALSE)
+
+# NIPALS - classical iterative method
+fit_nipals <- pls_regression(X, Y, ncomp = 5, algorithm = "nipals",
+                              verbose = FALSE)
+
+cat("SIMPLS R2:", round(fit_simpls$R2Y_cum[5], 4), "\n")
+cat("NIPALS R2:", round(fit_nipals$R2Y_cum[5], 4), "\n")
+```
+
+| Algorithm | Speed | Orthogonal Scores | Missing Data | Recommended For |
+|-----------|-------|-------------------|--------------|-----------------|
+| SIMPLS | Fast | Yes | No | Most applications |
+| NIPALS | Slower | No | Yes | Missing data, very large p |
+
+## Complete Analysis Pipeline
+
+Here's a recommended workflow for a complete PLS regression analysis:
+
+```{r pipeline, eval=FALSE}
+# 1. Cross-validate to select number of components
+cv <- pls_cv(X, Y, ncomp_max = 15, method = "kfold", k = 10)
+optimal_ncomp <- cv$optimal_ncomp
+
+# 2. Fit final model
+fit <- pls_regression(X, Y, ncomp = optimal_ncomp)
+
+# 3. Assess significance with permutation testing
+fit_perm <- pls_regression_perm(X, Y, ncomp = optimal_ncomp, num_perm = 1000)
+
+# 4. Get confidence intervals with bootstrap
+fit_boot <- pls_regression_boot(X, Y, ncomp = optimal_ncomp, num_boot = 1000)
+
+# 5. Identify important predictors
+vip <- fit_boot$vip[, optimal_ncomp]
+significant <- abs(fit_boot$boot_result$compare_B) > 2
+important_regions <- which(vip > 1 & significant)
+
+# 6. Visualize results
+plot_regression_summary(fit_boot)
+
+# 7. Report results
+cat("PLS Regression Results\n")
+cat("======================\n")
+cat("Optimal components:", optimal_ncomp, "\n")
+cat("Cross-validated Q2:", round(cv$Q2[optimal_ncomp], 3), "\n")
+cat("Training R2:", round(fit$R2Y_cum[optimal_ncomp], 3), "\n")
+cat("Permutation p-value:", round(fit_perm$perm_result$p_value, 4), "\n")
+cat("Important predictors:", length(important_regions), "\n")
+```
+
+## Summary
+
+| Function | Purpose |
+|----------|---------|
+| `pls_regression()` | Fit PLS regression model |
+| `pls_cv()` | Cross-validation for component selection |
+| `predict()` | Predict Y from new X data |
+| `pls_regression_boot()` | Bootstrap confidence intervals |
+| `pls_regression_perm()` | Permutation significance test |
+| `pls_regression_mi()` | Multiple imputation for missing data |
+| `plot_vip()` | Variable importance plot |
+| `plot_loadings()` | Loading weights plot |
+| `plot_regression_summary()` | Combined summary figure |
+
+## References
+
+- de Jong, S. (1993). SIMPLS: An alternative approach to partial least squares regression. *Chemometrics and Intelligent Laboratory Systems*, 18, 251-263.
+- Wold, S., Sjöström, M., & Eriksson, L. (2001). PLS-regression: A basic tool of chemometrics. *Chemometrics and Intelligent Laboratory Systems*, 58, 109-130.
+- Krishnan, A., Williams, L. J., McIntosh, A. R., & Abdi, H. (2011). Partial least squares (PLS) methods for neuroimaging. *NeuroImage*, 56, 455-475.
