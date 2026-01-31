@@ -722,3 +722,420 @@ plot_all_significant_lvs <- function(result, behav_names = NULL,
 
   return(figures)
 }
+
+
+# ===========================================================================
+# PLS Regression Visualization Functions
+# ===========================================================================
+
+#' Plot VIP Scores for PLS Regression
+#'
+#' Creates a bar plot of Variable Importance in Projection (VIP) scores
+#' with an optional threshold line.
+#'
+#' @param result A pls_regression_result object
+#' @param comp Component number to use for VIP (default: final component)
+#' @param threshold VIP threshold line (default: 1.0)
+#' @param var_names Optional character vector of variable names
+#' @param top_n Number of top variables to show (default: 30)
+#' @param colors Named list of colors (see \code{\link{pls_colors}})
+#' @param font_sizes Named list with base_size, title_size, axis_title_size, axis_text_size
+#' @param show_ci Show bootstrap confidence intervals if available (default: TRUE)
+#'
+#' @return A ggplot2 object
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' fit <- pls_regression(X, Y, ncomp = 5)
+#' p <- plot_vip(fit, top_n = 20)
+#' print(p)
+#' }
+plot_vip <- function(result, comp = NULL, threshold = 1.0,
+                      var_names = NULL, top_n = 30,
+                      colors = NULL, font_sizes = NULL,
+                      show_ci = TRUE) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting")
+  }
+
+  if (!inherits(result, "pls_regression_result")) {
+    stop("result must be a pls_regression_result object")
+  }
+
+  if (is.null(colors)) colors <- pls_colors()
+  if (is.null(font_sizes)) {
+    font_sizes <- list(base_size = 12, title_size = 14,
+                       axis_title_size = 12, axis_text_size = 10)
+  }
+
+  if (is.null(comp)) comp <- result$ncomp
+  p <- result$p
+
+  vip <- result$vip[, comp]
+
+  if (is.null(var_names)) {
+    var_names <- paste0("X", seq_len(p))
+  }
+
+  # Create data frame
+  df <- data.frame(
+    Variable = var_names,
+    VIP = vip,
+    Important = vip > threshold
+  )
+
+  # Add CIs if available
+  has_ci <- !is.null(result$boot_result) && show_ci
+  if (has_ci) {
+    df$CI_low <- result$boot_result$vip_ci_low
+    df$CI_high <- result$boot_result$vip_ci_high
+  }
+
+  # Sort and filter
+  df <- df[order(df$VIP, decreasing = TRUE), ]
+  if (!is.null(top_n) && top_n < nrow(df)) {
+    df <- df[1:top_n, ]
+  }
+  df$Variable <- factor(df$Variable, levels = rev(df$Variable))
+
+  # Create plot
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$Variable, y = .data$VIP,
+                                         fill = .data$Important)) +
+    ggplot2::geom_bar(stat = "identity", color = colors$bar_outline, width = 0.7) +
+    ggplot2::geom_hline(yintercept = threshold, linetype = "dashed",
+                        color = colors$positive, linewidth = 0.8) +
+    ggplot2::scale_fill_manual(
+      values = c("TRUE" = colors$positive, "FALSE" = colors$nonsignificant),
+      labels = c("TRUE" = paste0("VIP > ", threshold), "FALSE" = paste0("VIP <= ", threshold)),
+      name = "Importance"
+    ) +
+    ggplot2::coord_flip() +
+    ggplot2::labs(
+      title = sprintf("Variable Importance in Projection (Component %d)", comp),
+      x = "",
+      y = "VIP Score"
+    ) +
+    theme_pls(base_size = font_sizes$base_size, title_size = font_sizes$title_size,
+              axis_title_size = font_sizes$axis_title_size,
+              axis_text_size = font_sizes$axis_text_size)
+
+  # Add CIs if available
+  if (has_ci) {
+    p <- p + ggplot2::geom_errorbar(
+      ggplot2::aes(ymin = .data$CI_low, ymax = .data$CI_high),
+      width = 0.2, linewidth = 0.5
+    )
+  }
+
+  p
+}
+
+
+#' Plot PLS Regression Loadings
+#'
+#' Creates a bar plot of X or Y loadings for a specified component.
+#'
+#' @param result A pls_regression_result object
+#' @param comp Component number (default: 1)
+#' @param type Which loadings: "X", "Y", or "both" (default: "X")
+#' @param var_names Optional character vector of variable names
+#' @param top_n Number of top variables to show (default: 30 for X, all for Y)
+#' @param colors Named list of colors
+#' @param font_sizes Named list of font sizes
+#'
+#' @return A ggplot2 object
+#'
+#' @export
+plot_loadings <- function(result, comp = 1, type = "X",
+                           var_names = NULL, top_n = NULL,
+                           colors = NULL, font_sizes = NULL) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting")
+  }
+
+  if (!inherits(result, "pls_regression_result")) {
+    stop("result must be a pls_regression_result object")
+  }
+
+  if (is.null(colors)) colors <- pls_colors()
+  if (is.null(font_sizes)) {
+    font_sizes <- list(base_size = 12, title_size = 14,
+                       axis_title_size = 12, axis_text_size = 10)
+  }
+
+  type <- match.arg(type, c("X", "Y", "both"))
+
+  if (type == "both") {
+    if (!requireNamespace("patchwork", quietly = TRUE)) {
+      stop("Package 'patchwork' is required for combined plots")
+    }
+    p1 <- plot_loadings(result, comp, "X", var_names, top_n, colors, font_sizes)
+    p2 <- plot_loadings(result, comp, "Y", NULL, NULL, colors, font_sizes)
+    return(p1 / p2)
+  }
+
+  if (type == "X") {
+    loadings <- result$X_loadings[, comp]
+    title_prefix <- "X Loadings"
+    if (is.null(var_names)) var_names <- paste0("X", seq_len(result$p))
+    if (is.null(top_n)) top_n <- 30
+  } else {
+    loadings <- result$Y_loadings[, comp]
+    title_prefix <- "Y Loadings"
+    if (is.null(var_names)) var_names <- paste0("Y", seq_len(result$q))
+    if (is.null(top_n)) top_n <- result$q
+  }
+
+  # Create data frame
+  df <- data.frame(
+    Variable = var_names,
+    Loading = loadings,
+    Direction = ifelse(loadings >= 0, "Positive", "Negative")
+  )
+
+  # Sort by absolute value and filter
+  df <- df[order(abs(df$Loading), decreasing = TRUE), ]
+  if (top_n < nrow(df)) {
+    df <- df[1:top_n, ]
+  }
+  df$Variable <- factor(df$Variable, levels = rev(df$Variable))
+
+  # Create plot
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$Variable, y = .data$Loading,
+                                         fill = .data$Direction)) +
+    ggplot2::geom_bar(stat = "identity", color = colors$bar_outline, width = 0.7) +
+    ggplot2::geom_hline(yintercept = 0, linewidth = 0.5) +
+    ggplot2::scale_fill_manual(
+      values = c("Positive" = colors$positive, "Negative" = colors$negative),
+      name = "Direction"
+    ) +
+    ggplot2::coord_flip() +
+    ggplot2::labs(
+      title = sprintf("%s (Component %d)", title_prefix, comp),
+      x = "",
+      y = "Loading"
+    ) +
+    theme_pls(base_size = font_sizes$base_size, title_size = font_sizes$title_size,
+              axis_title_size = font_sizes$axis_title_size,
+              axis_text_size = font_sizes$axis_text_size)
+
+  p
+}
+
+
+#' Plot Predicted vs Observed Values
+#'
+#' Creates a scatter plot of predicted vs observed Y values with regression line.
+#'
+#' @param result A pls_regression_result object
+#' @param response_idx Which response variable to plot (default: 1)
+#' @param colors Named list of colors
+#' @param font_sizes Named list of font sizes
+#'
+#' @return A ggplot2 object
+#'
+#' @export
+plot_predicted_vs_observed <- function(result, response_idx = 1,
+                                        colors = NULL, font_sizes = NULL) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting")
+  }
+
+  if (!inherits(result, "pls_regression_result")) {
+    stop("result must be a pls_regression_result object")
+  }
+
+  if (is.null(colors)) colors <- pls_colors()
+  if (is.null(font_sizes)) {
+    font_sizes <- list(base_size = 12, title_size = 14,
+                       axis_title_size = 12, axis_text_size = 10)
+  }
+
+  # Get observed and predicted
+  if (result$q == 1) {
+    observed <- as.vector(result$Y_fitted - result$Y_residuals *
+                           ifelse(is.null(result$Y_scale), 1, result$Y_scale))
+    predicted <- as.vector(result$Y_fitted)
+  } else {
+    observed <- result$Y_fitted[, response_idx] -
+                result$Y_residuals[, response_idx] *
+                ifelse(is.null(result$Y_scale), 1, result$Y_scale[response_idx])
+    predicted <- result$Y_fitted[, response_idx]
+  }
+
+  df <- data.frame(Observed = observed, Predicted = predicted)
+
+  # Calculate R2
+  r2 <- result$R2Y_cum[result$ncomp]
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$Observed, y = .data$Predicted)) +
+    ggplot2::geom_point(color = colors$points, alpha = 0.6, size = 2) +
+    ggplot2::geom_abline(intercept = 0, slope = 1, linetype = "dashed",
+                         color = colors$line, linewidth = 0.8) +
+    ggplot2::geom_smooth(method = "lm", se = TRUE, color = colors$positive,
+                         fill = colors$ci_fill, alpha = 0.3) +
+    ggplot2::labs(
+      title = "Predicted vs Observed",
+      subtitle = sprintf("R-squared = %.3f", r2),
+      x = "Observed",
+      y = "Predicted"
+    ) +
+    theme_pls(base_size = font_sizes$base_size, title_size = font_sizes$title_size,
+              axis_title_size = font_sizes$axis_title_size,
+              axis_text_size = font_sizes$axis_text_size)
+
+  p
+}
+
+
+#' Plot Variance Explained
+#'
+#' Creates a bar plot showing variance explained per component.
+#'
+#' @param result A pls_regression_result object
+#' @param type "Y" (default), "X", or "both"
+#' @param colors Named list of colors
+#' @param font_sizes Named list of font sizes
+#'
+#' @return A ggplot2 object
+#'
+#' @export
+plot_variance_explained <- function(result, type = "Y",
+                                     colors = NULL, font_sizes = NULL) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting")
+  }
+
+  if (!inherits(result, "pls_regression_result")) {
+    stop("result must be a pls_regression_result object")
+  }
+
+  if (is.null(colors)) colors <- pls_colors()
+  if (is.null(font_sizes)) {
+    font_sizes <- list(base_size = 12, title_size = 14,
+                       axis_title_size = 12, axis_text_size = 10)
+  }
+
+  type <- match.arg(type, c("Y", "X", "both"))
+
+  ncomp <- result$ncomp
+
+  if (type == "both") {
+    df <- data.frame(
+      Component = rep(1:ncomp, 2),
+      Variance = c(result$R2X * 100, result$R2Y * 100),
+      Type = rep(c("X", "Y"), each = ncomp)
+    )
+
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = factor(.data$Component),
+                                           y = .data$Variance,
+                                           fill = .data$Type)) +
+      ggplot2::geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+      ggplot2::scale_fill_manual(values = c("X" = colors$negative, "Y" = colors$positive)) +
+      ggplot2::labs(
+        title = "Variance Explained per Component",
+        x = "Component",
+        y = "Variance Explained (%)"
+      )
+  } else {
+    var_exp <- if (type == "Y") result$R2Y * 100 else result$R2X * 100
+    cum_var <- cumsum(var_exp)
+
+    df <- data.frame(
+      Component = factor(1:ncomp),
+      Variance = var_exp,
+      Cumulative = cum_var
+    )
+
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$Component, y = .data$Variance)) +
+      ggplot2::geom_bar(stat = "identity", fill = colors$bar_fill,
+                        color = colors$bar_outline, width = 0.7) +
+      ggplot2::geom_line(ggplot2::aes(y = .data$Cumulative, group = 1),
+                         color = colors$positive, linewidth = 1) +
+      ggplot2::geom_point(ggplot2::aes(y = .data$Cumulative),
+                          color = colors$positive, size = 3) +
+      ggplot2::labs(
+        title = sprintf("%s Variance Explained", type),
+        subtitle = sprintf("Total: %.1f%%", cum_var[ncomp]),
+        x = "Component",
+        y = "Variance Explained (%)"
+      )
+  }
+
+  p + theme_pls(base_size = font_sizes$base_size, title_size = font_sizes$title_size,
+                axis_title_size = font_sizes$axis_title_size,
+                axis_text_size = font_sizes$axis_text_size)
+}
+
+
+#' Plot PLS Regression Summary
+#'
+#' Creates a combined multi-panel figure summarizing PLS regression results.
+#'
+#' @param result A pls_regression_result object
+#' @param var_names Optional predictor variable names
+#' @param colors Named list of colors
+#' @param font_sizes Named list of font sizes
+#' @param save_path Optional path to save figure
+#' @param width Figure width in inches (default: 12)
+#' @param height Figure height in inches (default: 10)
+#' @param dpi Resolution for saved figure (default: 300)
+#'
+#' @return A patchwork combined plot
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' fit <- pls_regression(X, Y, ncomp = 5)
+#' p <- plot_regression_summary(fit)
+#' print(p)
+#' }
+plot_regression_summary <- function(result, var_names = NULL,
+                                     colors = NULL, font_sizes = NULL,
+                                     save_path = NULL, width = 12,
+                                     height = 10, dpi = 300) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting")
+  }
+  if (!requireNamespace("patchwork", quietly = TRUE)) {
+    stop("Package 'patchwork' is required for combined plots")
+  }
+
+  if (!inherits(result, "pls_regression_result")) {
+    stop("result must be a pls_regression_result object")
+  }
+
+  if (is.null(colors)) colors <- pls_colors()
+  if (is.null(font_sizes)) {
+    font_sizes <- list(base_size = 10, title_size = 12,
+                       axis_title_size = 10, axis_text_size = 8)
+  }
+
+  # Create panels
+  p1 <- plot_variance_explained(result, type = "both", colors = colors, font_sizes = font_sizes)
+  p2 <- plot_predicted_vs_observed(result, colors = colors, font_sizes = font_sizes)
+  p3 <- plot_vip(result, var_names = var_names, top_n = 20,
+                  colors = colors, font_sizes = font_sizes)
+  p4 <- plot_loadings(result, comp = 1, type = "X", var_names = var_names,
+                       top_n = 20, colors = colors, font_sizes = font_sizes)
+
+  # Combine with patchwork
+  combined <- (p1 | p2) / (p3 | p4) +
+    patchwork::plot_annotation(
+      title = sprintf("PLS Regression Summary (%s, %d components)",
+                      toupper(result$algorithm), result$ncomp),
+      theme = ggplot2::theme(
+        plot.title = ggplot2::element_text(face = "bold", size = 16, hjust = 0.5)
+      )
+    )
+
+  if (!is.null(save_path)) {
+    ggplot2::ggsave(save_path, combined, width = width, height = height, dpi = dpi)
+    message(sprintf("Saved to %s", save_path))
+  }
+
+  combined
+}
